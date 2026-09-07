@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IT FUTA STUDENTS - Attendance</title>
+<style>
+:root{--purple:#6d28d9;--light:#f5f3ff;--green:#22c55e;--red:#ef4444;--gray:#64748b}
+*{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:#fff;color:#1e1b4b}
+header{background:linear-gradient(135deg,#5b21b6,#7c3aed);color:#fff;padding:20px 16px;position:sticky;top:0;z-index:5}
+h1{margin:0 0 5px;font-size:24px} header p{margin:0;opacity:.9}
+.container{padding:16px;max-width:1400px;margin:auto}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+input,button{border:1px solid #ddd;border-radius:9px;padding:11px 13px;font-size:15px}
+input{flex:1;min-width:190px}button{background:var(--purple);color:white;border:0;font-weight:bold;cursor:pointer}
+button.secondary{background:#ede9fe;color:#5b21b6}button.danger{background:#fee2e2;color:#b91c1c}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}.stat{background:var(--light);border-radius:12px;padding:12px 18px;min-width:120px}.stat b{display:block;font-size:20px}
+.tablewrap{overflow:auto;border:1px solid #ddd;border-radius:12px;box-shadow:0 2px 10px #0000000d}
+table{border-collapse:collapse;min-width:900px;width:100%}
+th,td{border-bottom:1px solid #e5e7eb;border-right:1px solid #eee;text-align:center;padding:7px}
+thead th{background:#f3e8ff;color:#4c1d95;position:sticky;top:0;z-index:2}
+.name{position:sticky;left:0;background:white;text-align:left;z-index:3;min-width:190px;font-weight:bold}
+thead .name{background:#f3e8ff;z-index:4}
+.month{background:#ddd6fe!important;font-size:14px}.week{font-size:11px;min-width:38px}
+.cell{width:34px;height:34px;border-radius:7px;background:#f8fafc;border:2px solid #e2e8f0;cursor:pointer;margin:auto;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;user-select:none}
+.cell.present{background:var(--green);border-color:var(--green)}.cell.absent{background:var(--red);border-color:var(--red)}
+.del{background:#fff;color:#ef4444;border:1px solid #fecaca;padding:5px 8px;border-radius:6px}
+.hint{font-size:13px;color:var(--gray);margin:8px 0 15px}
+.empty{text-align:center;padding:35px;color:#64748b}
+@media(max-width:600px){h1{font-size:20px}.container{padding:10px}.stats .stat{flex:1}.name{min-width:150px}}
+</style>
+</head>
+<body>
+<header><h1>IT FUTA STUDENTS</h1><p>Attendance Tracking Dashboard</p></header>
+<div class="container">
+  <div class="controls">
+    <input id="nameInput" placeholder="Enter student name">
+    <button onclick="addStudent()">+ Add Student</button>
+    <input id="search" placeholder="Search student..." oninput="render()">
+    <button class="secondary" onclick="exportCSV()">Export Records</button>
+    <button class="danger" onclick="clearAll()">Clear All</button>
+  </div>
+  <div class="stats">
+    <div class="stat">Students<b id="students">0</b></div>
+    <div class="stat">Present<b id="present">0</b></div>
+    <div class="stat">Absent<b id="absent">0</b></div>
+    <div class="stat">Marked<b id="marked">0</b></div>
+  </div>
+  <div class="hint">🟢 Single click = Present &nbsp; • &nbsp; 🔴 Double click = Absent &nbsp; • &nbsp; Click a marked box to clear it</div>
+  <div class="tablewrap"><table id="table"></table></div>
+</div>
+<script>
+const months=["Month 1","Month 2","Month 3","Month 4","Month 5"];
+const weeks=20;
+let data=JSON.parse(localStorage.getItem("itfutaAttendance")||"{}");
+let students=JSON.parse(localStorage.getItem("itfutaStudents")||"[]");
+
+function save(){localStorage.setItem("itfutaAttendance",JSON.stringify(data));localStorage.setItem("itfutaStudents",JSON.stringify(students))}
+function addStudent(){
+ const inp=document.getElementById("nameInput"), name=inp.value.trim();
+ if(!name)return alert("Enter a student name.");
+ if(students.some(x=>x.toLowerCase()===name.toLowerCase()))return alert("That student already exists.");
+ students.push(name); data[name]={}; inp.value=""; save(); render();
+}
+document.getElementById("nameInput").addEventListener("keydown",e=>{if(e.key==="Enter")addStudent()});
+
+function setStatus(name,w,status){if(!data[name])data[name]={}; if(status)data[name][w]=status; else delete data[name][w]; save(); render();}
+function cell(name,w){
+ const state=(data[name]||{})[w]||"";
+ const el=document.createElement("div"); el.className="cell "+state; el.title="Single click: Present | Double click: Absent";
+ el.textContent=state==="present"?"✓":state==="absent"?"×":"";
+ let timer;
+ el.onclick=()=>{clearTimeout(timer);timer=setTimeout(()=>setStatus(name,w,state?"": "present"),220)};
+ el.ondblclick=()=>{clearTimeout(timer);setStatus(name,w,"absent")};
+ return el;
+}
+function removeStudent(name){
+ if(confirm("Remove "+name+" and all attendance records?")){students=students.filter(x=>x!==name);delete data[name];save();render();}
+}
+function render(){
+ const q=document.getElementById("search").value.toLowerCase();
+ const list=students.filter(n=>n.toLowerCase().includes(q));
+ let t="<thead><tr><th class='name'>Student Name</th>";
+ months.forEach(m=>t+=`<th class="month" colspan="4">${m}</th>`);
+ t+="<th>Action</th></tr><tr><th class='name'></th>";
+ for(let w=1;w<=weeks;w++)t+=`<th class="week">W${w}</th>`;
+ t+="<th></th></tr></thead><tbody>";
+ if(!list.length)t+=`<tr><td class="empty" colspan="22">No students yet. Add a student above.</td></tr>`;
+ list.forEach(name=>{
+   t+=`<tr><td class="name">${escapeHTML(name)}</td>`;
+   for(let w=1;w<=weeks;w++)t+="<td id='c-"+encodeURIComponent(name)+"-"+w+"'></td>";
+   t+=`<td><button class="del" onclick="removeStudent(${JSON.stringify(name)})">Delete</button></td></tr>`;
+ });
+ t+="</tbody>";document.getElementById("table").innerHTML=t;
+ list.forEach(name=>{for(let w=1;w<=weeks;w++){document.getElementById("c-"+encodeURIComponent(name)+"-"+w).appendChild(cell(name,w));}});
+ updateStats();
+}
+function updateStats(){
+ let p=0,a=0,m=0;
+ students.forEach(n=>Object.values(data[n]||{}).forEach(s=>{m++;if(s==="present")p++;if(s==="absent")a++;}));
+ document.getElementById("students").textContent=students.length;
+ document.getElementById("present").textContent=p;
+ document.getElementById("absent").textContent=a;
+ document.getElementById("marked").textContent=m;
+}
+function escapeHTML(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
+function exportCSV(){
+ let rows=[["Student Name",...Array.from({length:weeks},(_,i)=>"Week "+(i+1))]];
+ students.forEach(n=>rows.push([n,...Array.from({length:weeks},(_,i)=>(data[n]||{})[i+1]||"")]));
+ let csv=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(",")).join("\n");
+ let blob=new Blob([csv],{type:"text/csv"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="IT-FUTA-Attendance.csv";a.click();
+}
+function clearAll(){if(confirm("Delete ALL students and attendance records?")){students=[];data={};save();render();}}
+render();
+</script>
+</body>
+</html>
